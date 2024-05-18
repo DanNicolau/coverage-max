@@ -54,38 +54,18 @@ class Pokemon:
         self.is_default: bool = is_default
 
     #this is probably wrong lol
-    def get_types(self, pokemon: pb.APIResource, gen):
-        """
-        for past types this goes:
-        gen = 3
-        1,4,5  data will have 4 as the correct gen, we want to take the first gen that is above or equal to the current gen
-        """
-        if len(pokemon.past_types):
-            pokemon.past_types.sort(key=gen_sort)
-            for t in pokemon.past_types:
-                if int(t.generation.url.split('/')[-2]) < gen:
-                    continue
-                else:
-                    types = [None, None]
-                    for type in t.types:
-                        match type.slot:
-                            case 1:
-                                types[0] = type.type.name
-                            case 2:
-                                types[1] = type.type.name
-                            case _:
-                                raise ValueError("unknown type slot")
-                    return types
-                                
+    def get_types(self, pokemon: pb.APIResource, gen: int):
         types = [None, None]
-        for type in pokemon.types:
-            match type.slot:
-                case 1:
-                    types[0] = type.type.name
-                case 2:
-                    types[1] = type.type.name
-                case _:
-                    raise ValueError("unknown type slot")
+
+        for t in pokemon.types:
+            types[t.slot - 1] = t.type.name
+
+        pokemon.past_types.sort(reverse=True, key=gen_sort)
+        for pt in pokemon.past_types:
+            if int(pt.generation.url.split('/')[-2]) < gen:
+                break
+            for t in pt.types:
+                types[t.slot - 1] = t.type.name
         return types
 
     def get_stats(self, pokemon: pb.APIResource):
@@ -104,7 +84,6 @@ class Pokemon:
             if int(past_abilities.generation.url.split('/')[-2]) < gen:
                 break
             for past_ability in past_abilities.abilities:
-                print(past_ability)
                 abilities[past_ability.slot - 1] = past_ability.ability.name
 
         return abilities
@@ -137,9 +116,9 @@ class Pokedex:
     def __init__(self, gen_int, is_range=True, force_update=False):
         self.gen: int = gen_int
         self.is_range: bool = is_range
-        self.pokemon_species: dict[std, PokemonSpecies] = {}
+        self.pokemon_species: dict[str, PokemonSpecies] = {}
         gen_range = range(1, self.gen + 1) if self.is_range else range(self.gen, self.gen + 1)
-        self.gen_str: str = pb.generation(gen).name
+        self.gen_str: str = pb.generation(self.gen).name
 
 
         for gen_idx in gen_range:
@@ -150,7 +129,6 @@ class Pokedex:
                 self.pokemon_species[s.name] = PokemonSpecies(s.id, gen_idx, s.name, s.varieties,
                                                               evolution_chain_id=s.evolution_chain.url.split('/')[-2])
                 print(f'gen: {gen_idx}/{gen_range[-1]} | pokemon: {i+1}/{n} {s.name} {len(s.varieties)} variet{"y" if len(s.varieties) == 1 else "ies"}')
-                break
 
     def get_save_path_self(self):
         return Pokedex.get_save_path(self.gen, self.is_range)
@@ -188,9 +166,9 @@ class Pokedex:
 if __name__ == "__main__":
     gen = 3
     is_range = True
-    force_update=False
+    force_update=True
 
-    loaded_dex = Pokedex.load(gen, is_range, force_update=False)
+    loaded_dex = Pokedex.load(gen, is_range, force_update=force_update)
 
     print('\n\nloaded dex')
     print(type(loaded_dex.pokemon_species))
