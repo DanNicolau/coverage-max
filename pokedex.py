@@ -2,7 +2,6 @@ from dataclasses import dataclass
 import pokebase as pb
 import pickle
 from os import path
-from multipledispatch import dispatch
 
 MAX_GEN = 9
 
@@ -189,4 +188,3 @@ if __name__ == "__main__":
     force_update=False
 
     dex = Pokedex.load(gen, is_range)
-    print(dex.gen)
