@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import pokebase as pb
-import pickle
+import dill as pickle
 from os import path
 
 MAX_GEN = 9
@@ -8,12 +8,11 @@ MAX_GEN = 9
 def gen_sort(el):
     return int(el.generation.url.split('/')[-2])
 
-@dataclass
 class MoveVersionGroup:
-    level_learned_at: int
-    learn_method: str
-    version_group_id: int
-    version_group_name: str
+    # level_learned_at: int
+    # learn_method: str
+    # version_group_id: int
+    # version_group_name: str
 
     def __init__(self, version_group: pb.APIResource):
         self.level_learned_at = version_group.level_learned_at
@@ -21,11 +20,10 @@ class MoveVersionGroup:
         self.version_group_id = version_group.version_group.url.split('/')[-2]
         self.version_group_name = version_group.version_group.name
 
-@dataclass
 class Move:
-    id: int
-    name: str
-    version_groups: list[MoveVersionGroup]
+    # id: int
+    # name: str
+    # version_groups: list[MoveVersionGroup]
 
     def __init__(self, move: pb.APIResource):
         self.name = move.move.name
@@ -44,22 +42,16 @@ class Ability:
 
 @dataclass
 class Pokemon:
-    id: int
-    name: str
-    types: tuple[str, str | None]
-    pokemon_species_id: int
-    stats: dict[str, int]
-    is_default: bool
-    abilities: list[str]
-
+    
     def __init__(self, gen: int, pokemon: pb.APIResource, pokemon_species_id: int, is_default: bool):
-        self.pokemon_species_id = pokemon_species_id
-        self.name = pokemon.name
-        self.types = self.get_types(pokemon, gen)
-        self.stats = self.get_stats(pokemon)
-        self.abilities = self.get_abilities(pokemon, gen)
-        self.moves = self.get_moves(pokemon)
-        self.is_default = is_default
+        self.id: int = pokemon.id
+        self.pokemon_species_id: int = pokemon_species_id
+        self.name: str = pokemon.name
+        self.types: tuple[str, str | None] = self.get_types(pokemon, gen)
+        self.stats: dict[str, int] = self.get_stats(pokemon)
+        self.abilities: list[str] = self.get_abilities(pokemon, gen)
+        self.moves: list[Move] = self.get_moves(pokemon)
+        self.is_default: bool = is_default
 
     #this is probably wrong lol
     def get_types(self, pokemon: pb.APIResource, gen):
@@ -125,14 +117,15 @@ class Pokemon:
 
 @dataclass
 class PokemonSpecies:
-    id: int
-    name: str
-    evolution_chain_id: int
-    varieties: list[Pokemon]
+    # id: int
+    # name: str
+    # evolution_chain_id: int
+    # varieties: list[Pokemon]
 
-    def __init__(self, gen, id, name, varieties):
+    def __init__(self, gen, id, name, varieties, evolution_chain_id):
         self.id = id
         self.name = name
+        self.evolution_chain_id = evolution_chain_id
         self.varieties = []
         for v in varieties:
             pokemon_name = v.pokemon.name
@@ -141,24 +134,23 @@ class PokemonSpecies:
             self.varieties.append(p)
 
 class Pokedex:
-    gen: int
-    gen_str: str
-    is_range: bool
-    pokemon_species: dict[str,PokemonSpecies] = {}
-
     def __init__(self, gen_int, is_range=True, force_update=False):
-        self.gen = gen_int
-        self.is_range = is_range
+        self.gen: int = gen_int
+        self.is_range: bool = is_range
+        self.pokemon_species: dict[std, PokemonSpecies] = {}
         gen_range = range(1, self.gen + 1) if self.is_range else range(self.gen, self.gen + 1)
-    
+        self.gen_str: str = pb.generation(gen).name
+
+
         for gen_idx in gen_range:
             gen = pb.generation(gen_idx)
-            gen_str = gen.name
             species = gen.pokemon_species
             for i, s in enumerate(species):
                 (n := len(species))
-                self.pokemon_species[s.name] = PokemonSpecies(s.id, gen_idx, s.name, s.varieties)
+                self.pokemon_species[s.name] = PokemonSpecies(s.id, gen_idx, s.name, s.varieties,
+                                                              evolution_chain_id=s.evolution_chain.url.split('/')[-2])
                 print(f'gen: {gen_idx}/{gen_range[-1]} | pokemon: {i+1}/{n} {s.name} {len(s.varieties)} variet{"y" if len(s.varieties) == 1 else "ies"}')
+                break
 
     def get_save_path_self(self):
         return Pokedex.get_save_path(self.gen, self.is_range)
@@ -170,21 +162,53 @@ class Pokedex:
 
     def save(self):
         with open(self.get_save_path_self(), 'wb') as f:
+            print(f'saving pickle dex to {self.get_save_path_self()}')
             pickle.dump(self, f)
     
     @staticmethod
-    def load(gen, is_range):
-        try:    
-            with open(Pokedex.get_save_path(gen, range), 'rb') as f:
-                dex = pickle.load(f)
-        except FileNotFoundError as e:
-            dex = Pokedex(gen_int=gen, is_range=is_range, force_update=True)
+    def load(gen, is_range, force_update=False):
+        if not force_update:
+            try:    
+                with open(Pokedex.get_save_path(gen, is_range), 'rb') as f:
+                    print(f'file found at {Pokedex.get_save_path(gen, is_range)}, loading dex')
+                    dex = pickle.load(f)
+            except FileNotFoundError as e:
+                print('file not found saving new dex pickle')
+                dex = Pokedex(gen_int=gen, is_range=is_range)
+                dex.save()
+        else:
+            print('forcing update')
+            dex = Pokedex(gen_int=gen, is_range=is_range)
             dex.save()
         return dex
+    
+    def __str__(self):
+        return f'{self.gen_str} | {len(self.pokemon_species)} species of pokemon | {"includes prior gens" if self.is_range else "only this gen"}'
 
 if __name__ == "__main__":
     gen = 3
     is_range = True
     force_update=False
 
-    dex = Pokedex.load(gen, is_range)
+    loaded_dex = Pokedex.load(gen, is_range, force_update=False)
+
+    print('\n\nloaded dex')
+    print(type(loaded_dex.pokemon_species))
+    print(loaded_dex)
+
+    for ps in loaded_dex.pokemon_species:
+        print(loaded_dex.pokemon_species[ps].name)
+
+    dex_to_save = Pokedex(gen_int=gen, is_range=is_range)
+    dex_to_save.save()
+
+    loaded_dex = Pokedex.load(gen, is_range, force_update=False)
+
+    print('previous dex:')
+    print(dex_to_save.pokemon_species)
+    del dex_to_save
+    print('\n\nloaded dex')
+    print(type(loaded_dex.pokemon_species))
+    print(loaded_dex)
+
+    #todo need to filter variants that are above the gen we are interested in
